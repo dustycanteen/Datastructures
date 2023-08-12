@@ -309,12 +309,12 @@ struct Node_dll{
 template <typename T>
 struct DLinkedList{
     Node_dll<T> *Init(void *buffer, T in_data){
-        Node_dll<T> *head = (Node_dll<T> *)buffer;
-        head->prev = NULL;
-        head->next = NULL;
-        head->data = in_data;
+        Node_dll<T> *node = (Node_dll<T> *)buffer;
+        node->prev = NULL;
+        node->next = NULL;
+        node->data = in_data;
         
-        return head;
+        return node;
     }
 
     Node_dll<T> *Head(Node_dll<T> *item){
@@ -337,7 +337,7 @@ struct DLinkedList{
         return current;
     }
     
-    void Insert(Node_dll<T> *at, Node_dll<T> *item){
+    void Insert(Node_dll<T> *item, Node_dll<T> *at){
         item->next = at->next;
         at->next = item;
         item->prev = at;
@@ -366,8 +366,7 @@ struct DLinkedList{
         printf("Printing List From Node: %p\n", (void *)item);
         printf("[Node at: %p < %lld >] -> \n", (void *)item, item->data);
         Node_dll<T> *current = item;
-        while((current = current->next)->next != NULL && count++ < MAX_LIST_SIZE) //just assume no cycles D:
-        {
+        while((current = current->next)->next != NULL && count++ < MAX_LIST_SIZE){ //just assume no cycles D:
             printf("[Node at: %p < %lld >] -> \n", (void *)current, current->data);
         }
         printf("[Node at: %p < %lld >] -> \n", (void *)current, current->data);
@@ -375,36 +374,151 @@ struct DLinkedList{
 };
 
 template <typename T>
-struct Node_dlal{
-    uint32_t prev;
-    uint32_t next;
+struct Node_dlol{
+    uint32_t offset_prev;
+    uint32_t offset_next;
     T data;
-}
+};
 
 template <typename T>
-struct DLArrayList{
-    RawBuffer *base_ptr;
-    
-    
+struct DLOffsetList{
+    Node_dlol<T> *Init(void *memory, T in_data){
+        Node_dlol<T> *item = (Node_dlol<T> *)memory;
+        item->offset_prev = 0;
+        item->offset_next = 0;
+        item->data = in_data;
 
-}
+        return item;
+    }
 
+    void InsertFirstAfter(Node_dlol<T> *item, Node_dlol<T> *at){
+        int tmp_next = at->offset_next;
+        
+        at->offset_next = item - at; 
+        item->offset_prev = at - item;
+
+        printf("Inserting node at %p after node at: %p | Computed Offsets: [at->next %d][item->prev %d]\n", item, at, at->offset_next, item->offset_prev);
+
+        if(tmp_next){
+            Node_dlol<T> *next = at + tmp_next;
+            item->offset_next = next - item;
+            next->offset_prev = item - next;
+        }
+        else{
+            item->offset_next = 0;
+        }
+    }
+    
+    void InsertFirstBefore(Node_dlol<T> *item, Node_dlol<T> *at){
+        int tmp_prev = at->offset_prev;
+
+        at->offset_prev = item - at; 
+        item->offset_next = at - item;
+
+        if(tmp_prev){
+            Node_dlol<T> *prev = at + tmp_prev;
+            item->offset_prev = prev - item;
+            prev->offset_prev = item - prev;
+        } 
+        else{
+            item->offset_prev = 0;
+        }
+    }
+
+    void Remove(Node_dlol<T> *item){
+        Node_dlol<T> *next = item + item->offset_next;
+        Node_dlol<T> *prev = item + item->offset_prev;
+
+        next->offset_prev += item->offset_prev;
+        prev->offset_next += item->offset_next;
+        item->next = 0;
+        item->prev = 0;
+    }
+
+    void Swap(Node_dlol<T> *A, Node_dlol<T> *B){
+        int A_minus_B = A-B;
+        int B_minus_A = -A_minus_B;
+        
+        int tmp_A_prev = A->offset_prev;
+        int tmp_A_next = A->offset_next;
+        A->offset_prev = A_minus_B + B->offset_prev;
+        A->offset_next = A_minus_B + B->offset_next;
+        B->offset_prev = B_minus_A + tmp_A_prev;
+        B->offset_next = B_minus_A + tmp_A_next;
+    }
+
+    inline Node_dlol<T>* Next(Node_dlol<T> *item){
+        if(item->offset_next != 0){
+            return item+item->offset_next;
+        }
+        return NULL;
+    }
+    inline Node_dlol<T>* Prev(Node_dlol<T> *item){
+        if(item->offset_prev != 0){
+            return item+item->offset_prev;
+        }
+        return NULL;
+    }
+    
+    void PrintFrom(Node_dlol<T> *item){
+        Node_dlol<T> *current = item;
+        printf("Printing from item at location: %p\n", current);
+        do{
+            printf("%lld -> ", current->data);
+        }
+        while((Next(current))!=NULL);
+        printf("X\n");
+    }
+};
 
 int main(){
     RawBuffer dll_memory("DLL memory", sizeof(Node_dll<int64_t>) * 16);
     DLinkedList<int64_t> cursor;
     Node_dll<int64_t> *list_head = cursor.Init(dll_memory.base, 0);
-    Node_dll<int64_t> *list_tail = list_head;
     for(int i = 1; i <= 10; ++i){
-        cursor.Insert(list_tail++, list_tail);
-        list_tail->data = i;
+        cursor.Insert(cursor.Init(list_head+i,i), list_head+i-1);
     }
+    Node_dll<int64_t> *list_tail = list_head + 10;
     printf("List head [prev][next]:  [%p][%p]\n", (void *)list_head->prev, (void *)list_head->next);
     cursor.PrintFrom(list_head);
     printf("List tail [prev][next]:  [%p][%p]\n", (void *)list_tail->prev, (void *)list_tail->next);
 
     printf("[Cached Head][Computed Head]:[%lld][%lld]\n", list_head->data, cursor.Head(list_tail)->data);
     printf("[Cached Tail][Computed Tail]:[%lld][%lld]\n", list_tail->data, cursor.Tail(list_head)->data);
+    
+
+    //Offset list is still broken
+    //need to figure out why the olist head is still getting +16 for the offset
+    RawBuffer offset_list("OffsetList memory", sizeof(Node_dlol<int64_t>) * 16);
+    DLOffsetList<int64_t> offset_list_cursor;
+    Node_dlol<int64_t> *olist_head = offset_list_cursor.Init(offset_list.base, 0);
+    printf("OffsetList Node [ prev <- |Location| -> next ]\n");
+    printf("[ %d <- |%p| -> %d ]\n", olist_head->offset_prev, olist_head, olist_head->offset_next);
+    for(int i = 1; i < 16; ++i){
+        offset_list_cursor.InsertFirstAfter(offset_list_cursor.Init(olist_head+i, i), olist_head+i-1);
+    }
+    //offset_list_cursor.PrintFrom(olist_head);
+    printf("item next|prev: %d|%d\n", (olist_head+5)->offset_prev, (olist_head+5)->offset_next);
+    printf("item next|prev: %d|%d\n", (olist_head+2)->offset_prev, (olist_head+2)->offset_next);
+
+    offset_list_cursor.Swap(olist_head+5, olist_head+2);
+    printf("item next|prev: %d|%d\n", (olist_head+5)->offset_prev, (olist_head+5)->offset_next);
+    printf("item next|prev: %d|%d\n", (olist_head+2)->offset_prev, (olist_head+2)->offset_next);
+
+    offset_list_cursor.Swap(olist_head+1, olist_head+14);
+    offset_list_cursor.Swap(olist_head+14, olist_head+9);
+    offset_list_cursor.Swap(olist_head+12, olist_head+6);
+    offset_list_cursor.Swap(olist_head+2, olist_head+3);
+    offset_list_cursor.Swap(olist_head+13, olist_head+7);
+    offset_list_cursor.Swap(olist_head+4, olist_head+5);
+    offset_list_cursor.Swap(olist_head+6, olist_head+11);
+    offset_list_cursor.Swap(olist_head, olist_head+15);
+    olist_head = olist_head+15;
+    printf("list head next offset: %d\n", olist_head->offset_next);
+
+    //offset_list_cursor.PrintFrom(olist_head);
+
+
 
 
     return 0;
