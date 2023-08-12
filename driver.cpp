@@ -298,9 +298,98 @@ public:
     }
 };
 
-int main(){
-    RawBuffer stack_memory("Stack memory", 128);
+
+template <typename T>
+struct Node_dll{
+    Node_dll<T> *prev;
+    Node_dll<T> *next;
+    T data;
+};
+
+template <typename T>
+struct DLinkedList{
+    Node_dll<T> *Init(void *buffer, T in_data){
+        Node_dll<T> *head = (Node_dll<T> *)buffer;
+        head->prev = NULL;
+        head->next = NULL;
+        head->data = in_data;
+        
+        return head;
+    }
+
+    Node_dll<T> *Head(Node_dll<T> *item){
+        const int MAX_LIST_SIZE = 16;
+        int count = 0;
+
+        Node_dll<T> *current = item;
+
+        while((current = current->prev)->prev != NULL && count++ < MAX_LIST_SIZE); //just assume no cycles D:
+        return current;
+    }
     
+    Node_dll<T> *Tail(Node_dll<T> *item){
+        const int MAX_LIST_SIZE = 16;
+        int count = 0;
+
+        Node_dll<T> *current = item;
+
+        while((current = current->next)->next != NULL && count++ < MAX_LIST_SIZE); //just assume no cycles D:
+        return current;
+    }
+    
+    void Insert(Node_dll<T> *at, Node_dll<T> *item){
+        item->next = at->next;
+        at->next = item;
+        item->prev = at;
+        assert(at != item);
+        if(item->next){
+            item->next->prev = at;
+        }
+    }
+
+    void Remove(Node_dll<T> *item){
+        if(item->next)
+        {
+            item->next->prev = item->prev;
+        }
+        if(item->prev){
+            item->prev->next = item->next;
+        }
+        item->next = NULL;
+        item->prev = NULL;
+    }
+
+    void PrintFrom(Node_dll<T> *item){
+        const int MAX_LIST_SIZE = 16;
+        int count = 0;
+
+        printf("Printing List From Node: %p\n", (void *)item);
+        printf("[Node at: %p < %lld >] -> \n", (void *)item, item->data);
+        Node_dll<T> *current = item;
+        while((current = current->next)->next != NULL && count++ < MAX_LIST_SIZE) //just assume no cycles D:
+        {
+            printf("[Node at: %p < %lld >] -> \n", (void *)current, current->data);
+        }
+        printf("[Node at: %p < %lld >] -> \n", (void *)current, current->data);
+    }
+};
+
+int main(){
+    RawBuffer dll_memory("DLL memory", sizeof(Node_dll<int64_t>) * 16);
+    DLinkedList<int64_t> cursor;
+    Node_dll<int64_t> *list_head = cursor.Init(dll_memory.base, 0);
+    Node_dll<int64_t> *list_tail = list_head;
+    for(int i = 1; i <= 10; ++i){
+        cursor.Insert(list_tail++, list_tail);
+        list_tail->data = i;
+    }
+    printf("List head [prev][next]:  [%p][%p]\n", (void *)list_head->prev, (void *)list_head->next);
+    cursor.PrintFrom(list_head);
+    printf("List tail [prev][next]:  [%p][%p]\n", (void *)list_tail->prev, (void *)list_tail->next);
+
+    printf("[Cached Head][Computed Head]:[%lld][%lld]\n", list_head->data, cursor.Head(list_tail)->data);
+    printf("[Cached Tail][Computed Tail]:[%lld][%lld]\n", list_tail->data, cursor.Tail(list_head)->data);
+
 
     return 0;
 }
