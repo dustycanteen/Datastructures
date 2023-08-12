@@ -374,6 +374,22 @@ struct DLinkedList{
     }
 };
 
+template <typename T>
+struct Node_dlal{
+    uint32_t prev;
+    uint32_t next;
+    T data;
+}
+
+template <typename T>
+struct DLArrayList{
+    RawBuffer *base_ptr;
+    
+    
+
+}
+
+
 int main(){
     RawBuffer dll_memory("DLL memory", sizeof(Node_dll<int64_t>) * 16);
     DLinkedList<int64_t> cursor;
