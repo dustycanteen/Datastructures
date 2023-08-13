@@ -436,24 +436,67 @@ struct DLOffsetList{
     }
 
     void Swap(Node_dlol<T> *A, Node_dlol<T> *B){
-        int A_minus_B = A-B;
-        int B_minus_A = -A_minus_B;
+        printf("Node offsets before swap\n");
+        printf("[ %d <- |%lld| -> %d ]\n",A->offset_prev, A->data, A->offset_next);
+        printf("[ %d <- |%lld| -> %d ]\n",B->offset_prev, B->data, B->offset_next);
+
+        int A_minus_B = A-B; 
+        int B_minus_A = B-A; 
+         
+        int new_A_prev = B_minus_A + B->offset_prev;
+        int new_A_next = B_minus_A + B->offset_next;
+
+        int new_B_prev = A_minus_B + A->offset_prev;
+        int new_B_next = A_minus_B + A->offset_next;
+        printf("Swap - Computed intermediate values\n\t[A-B|B-A]\t[Bp(A)|Bn(A)]\t[Ap(B)|An(B)]\n\t[%d|%d]\t\t[%d|%d]\t\t[%d|%d]\n", A_minus_B, B_minus_A, new_A_prev, new_A_next, new_B_prev, new_B_next);
+        //check if head or tail of list (offset = 0) indirectly to avoid overwriting for subsequent checks
+        if(new_B_next != A_minus_B){ 
+            B->offset_next = new_B_next;
+            Next(B)->offset_prev = -new_B_next;
+        }
+        else{
+            B->offset_next = 0;
+        }
+
+        if(new_B_prev != A_minus_B){
+            B->offset_prev = new_B_prev;
+            Prev(B)->offset_next = -new_B_prev;
+        }
+        else{
+            B->offset_prev = 0;
+        }
+
+        if(new_A_next != B_minus_A){ 
+            A->offset_next = new_A_next;
+            Next(A)->offset_prev = -new_A_next;
+        }
+        else{
+            A->offset_next = 0;
+        }
+
+        if(new_A_prev != B_minus_A){
+            A->offset_prev = new_A_prev;
+            Prev(A)->offset_next = -new_A_prev;
+        }
+        else{
+            A->offset_prev = 0;
+        }
         
-        int tmp_A_prev = A->offset_prev;
-        int tmp_A_next = A->offset_next;
-        A->offset_prev = A_minus_B + B->offset_prev;
-        A->offset_next = A_minus_B + B->offset_next;
-        B->offset_prev = B_minus_A + tmp_A_prev;
-        B->offset_next = B_minus_A + tmp_A_next;
+        printf("Node offsets after swap\n");
+        printf("[ %d <- |%lld| -> %d ]\n",A->offset_prev, A->data, A->offset_next);
+        printf("[ %d <- |%lld| -> %d ]\n",B->offset_prev, B->data, B->offset_next);
+        
     }
 
     inline Node_dlol<T>* Next(Node_dlol<T> *item){
+        //printf("Item next offset: %d\n", item->offset_next);
         if(item->offset_next != 0){
             return item+item->offset_next;
         }
         return NULL;
     }
     inline Node_dlol<T>* Prev(Node_dlol<T> *item){
+        //printf("Item next offset: %d\n", item->offset_prev);
         if(item->offset_prev != 0){
             return item+item->offset_prev;
         }
@@ -492,19 +535,17 @@ int main(){
     RawBuffer offset_list("OffsetList memory", sizeof(Node_dlol<int64_t>) * 16);
     DLOffsetList<int64_t> offset_list_cursor;
     Node_dlol<int64_t> *olist_head = offset_list_cursor.Init(offset_list.base, 0);
-    printf("OffsetList Node [ prev <- |Location| -> next ]\n");
-    printf("[ %d <- |%p| -> %d ]\n", olist_head->offset_prev, olist_head, olist_head->offset_next);
+    //printf("OffsetList Node [ prev <- |Location| -> next ]\n");
+    //printf("[ %d <- |%p| -> %d ]\n", olist_head->offset_prev, olist_head, olist_head->offset_next);
     for(int i = 1; i < 16; ++i){
         offset_list_cursor.InsertFirstAfter(offset_list_cursor.Init(olist_head+i, i), olist_head+i-1);
     }
-    //offset_list_cursor.PrintFrom(olist_head);
-    printf("item next|prev: %d|%d\n", (olist_head+5)->offset_prev, (olist_head+5)->offset_next);
-    printf("item next|prev: %d|%d\n", (olist_head+2)->offset_prev, (olist_head+2)->offset_next);
+    for(int i = 0; i < 16; i++){
+        Node_dlol<int64_t> *node = (olist_head+i);
+        //printf("[ %d <- |%lld| -> %d ]\n",node->offset_prev, node->data, node->offset_next);
+    }
 
     offset_list_cursor.Swap(olist_head+5, olist_head+2);
-    printf("item next|prev: %d|%d\n", (olist_head+5)->offset_prev, (olist_head+5)->offset_next);
-    printf("item next|prev: %d|%d\n", (olist_head+2)->offset_prev, (olist_head+2)->offset_next);
-
     offset_list_cursor.Swap(olist_head+1, olist_head+14);
     offset_list_cursor.Swap(olist_head+14, olist_head+9);
     offset_list_cursor.Swap(olist_head+12, olist_head+6);
@@ -512,10 +553,11 @@ int main(){
     offset_list_cursor.Swap(olist_head+13, olist_head+7);
     offset_list_cursor.Swap(olist_head+4, olist_head+5);
     offset_list_cursor.Swap(olist_head+6, olist_head+11);
-    offset_list_cursor.Swap(olist_head, olist_head+15);
-    olist_head = olist_head+15;
-    printf("list head next offset: %d\n", olist_head->offset_next);
 
+    for(int i = 0; i < 16; i++){
+        Node_dlol<int64_t> *node = (olist_head+i);
+        printf("[ %d <- |%lld| -> %d ]\n",node->offset_prev, node->data, node->offset_next);
+    }
     //offset_list_cursor.PrintFrom(olist_head);
 
 
