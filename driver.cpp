@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <new>
 #include <stdint.h>
+#include <string.h>
 
 #define ALLOCATE malloc 
 #define kb(s) (1024*(s))
@@ -78,6 +79,10 @@ struct Node_sll{
     Node_sll<T> *next;
     T data;
     Node_sll(T in_data):next(NULL), data(in_data){}
+
+    operator bool() const{
+        return next || data; 
+    }
 };
 
 template<typename T>
@@ -304,6 +309,10 @@ struct Node_dll{
     Node_dll<T> *prev;
     Node_dll<T> *next;
     T data;
+
+    operator bool() const{
+        return prev || next || data; 
+    }
 };
 
 template <typename T>
@@ -378,6 +387,10 @@ struct Node_dlol{
     uint32_t offset_prev;
     uint32_t offset_next;
     T data;
+
+    operator bool() const{
+        return offset_prev || offset_next || data; 
+    }
 };
 
 template <typename T>
@@ -391,16 +404,39 @@ struct DLOffsetList{
         return item;
     }
 
-    void InsertFirstAfter(Node_dlol<T> *item, Node_dlol<T> *at){
-        int tmp_next = at->offset_next;
-        
-        at->offset_next = item - at; 
-        item->offset_prev = at - item;
+    Node_dlol<T>* Next(Node_dlol<T> *item){
+        if(item->offset_next != 0){
+            //May be a bug in the GCC compiler, if I don't cache both offset_next and the next node (both of them; using the cached offset to compute the position of the next node as well)
+            //The computed node is off by 1mb (2^10). Only applies when the offset is negative.
+            int offset_next = item->offset_next;  
+            Node_dlol<T> *next_node = item+offset_next;
+            
+            return next_node;
+        }
+        return NULL;
+    }
+    Node_dlol<T>* Prev(Node_dlol<T> *item){
+        if(item->offset_prev != 0){
+            //May be a bug in the GCC compiler, if I don't cache both offset_next and the next node (both of them; using the cached offset to compute the position of the next node as well)
+            //The computed node is off by 1mb (2^10). Only applies when the offset is negative.
 
-        printf("Inserting node at %p after node at: %p | Computed Offsets: [at->next %d][item->prev %d]\n", item, at, at->offset_next, item->offset_prev);
+            int offset_prev = item->offset_prev;
+            Node_dlol<T> *prev_node = item+offset_prev;
+            return prev_node;
+        }
+        return NULL;
+    }
+
+    void InsertAfter(Node_dlol<T> *item, Node_dlol<T> *prev){
+        int tmp_next = prev->offset_next;
+        
+        prev->offset_next = item - prev; 
+        item->offset_prev = prev - item;
+
+        //printf("Inserting node at %p after node at: %p | Computed Offsets: [prev->next %d][item->prev %d]\n", item, prev, prev->offset_next, item->offset_prev);
 
         if(tmp_next){
-            Node_dlol<T> *next = at + tmp_next;
+            Node_dlol<T> *next = prev + tmp_next;
             item->offset_next = next - item;
             next->offset_prev = item - next;
         }
@@ -409,98 +445,37 @@ struct DLOffsetList{
         }
     }
     
-    void InsertFirstBefore(Node_dlol<T> *item, Node_dlol<T> *at){
-        int tmp_prev = at->offset_prev;
-
-        at->offset_prev = item - at; 
-        item->offset_next = at - item;
-
+    void InsertBefore(Node_dlol<T> *item, Node_dlol<T> *next){
+        int tmp_prev = next->offset_prev;
+        
+        next->offset_prev = item - next; 
+        item->offset_next = next - item;
         if(tmp_prev){
-            Node_dlol<T> *prev = at + tmp_prev;
+            Node_dlol<T> *prev = next + tmp_prev;
             item->offset_prev = prev - item;
-            prev->offset_prev = item - prev;
+            prev->offset_next = item - prev;
         } 
         else{
             item->offset_prev = 0;
         }
     }
 
-    void Remove(Node_dlol<T> *item){
-        Node_dlol<T> *next = item + item->offset_next;
-        Node_dlol<T> *prev = item + item->offset_prev;
-
-        next->offset_prev += item->offset_prev;
-        prev->offset_next += item->offset_next;
-        item->next = 0;
-        item->prev = 0;
-    }
-
-    void Swap(Node_dlol<T> *A, Node_dlol<T> *B){
-        printf("Node offsets before swap\n");
-        printf("[ %d <- |%lld| -> %d ]\n",A->offset_prev, A->data, A->offset_next);
-        printf("[ %d <- |%lld| -> %d ]\n",B->offset_prev, B->data, B->offset_next);
-
-        int A_minus_B = A-B; 
-        int B_minus_A = B-A; 
-         
-        int new_A_prev = B_minus_A + B->offset_prev;
-        int new_A_next = B_minus_A + B->offset_next;
-
-        int new_B_prev = A_minus_B + A->offset_prev;
-        int new_B_next = A_minus_B + A->offset_next;
-        printf("Swap - Computed intermediate values\n\t[A-B|B-A]\t[Bp(A)|Bn(A)]\t[Ap(B)|An(B)]\n\t[%d|%d]\t\t[%d|%d]\t\t[%d|%d]\n", A_minus_B, B_minus_A, new_A_prev, new_A_next, new_B_prev, new_B_next);
-        //check if head or tail of list (offset = 0) indirectly to avoid overwriting for subsequent checks
-        if(new_B_next != A_minus_B){ 
-            B->offset_next = new_B_next;
-            Next(B)->offset_prev = -new_B_next;
+    Node_dlol<T> *Remove(Node_dlol<T> *item){
+        int tmp_prev = item->offset_prev;
+        int tmp_next = item->offset_next;
+        if(tmp_prev && tmp_next){
+            Node_dlol<T> *next = Next(item);
+            Node_dlol<T> *prev = Prev(item);
+            next->offset_prev += tmp_prev;
+            prev->offset_next += tmp_next;
         }
         else{
-            B->offset_next = 0;
+            Node_dlol<T> *unsafe_prev = item + tmp_prev;
+            Node_dlol<T> *unsafe_next = item + tmp_next;
+            unsafe_prev->offset_next = 0;
+            unsafe_next->offset_prev = 0;
         }
-
-        if(new_B_prev != A_minus_B){
-            B->offset_prev = new_B_prev;
-            Prev(B)->offset_next = -new_B_prev;
-        }
-        else{
-            B->offset_prev = 0;
-        }
-
-        if(new_A_next != B_minus_A){ 
-            A->offset_next = new_A_next;
-            Next(A)->offset_prev = -new_A_next;
-        }
-        else{
-            A->offset_next = 0;
-        }
-
-        if(new_A_prev != B_minus_A){
-            A->offset_prev = new_A_prev;
-            Prev(A)->offset_next = -new_A_prev;
-        }
-        else{
-            A->offset_prev = 0;
-        }
-        
-        printf("Node offsets after swap\n");
-        printf("[ %d <- |%lld| -> %d ]\n",A->offset_prev, A->data, A->offset_next);
-        printf("[ %d <- |%lld| -> %d ]\n",B->offset_prev, B->data, B->offset_next);
-        
-    }
-
-    inline Node_dlol<T>* Next(Node_dlol<T> *item){
-        //printf("Item next offset: %d\n", item->offset_next);
-        if(item->offset_next != 0){
-            return item+item->offset_next;
-        }
-        return NULL;
-    }
-    inline Node_dlol<T>* Prev(Node_dlol<T> *item){
-        //printf("Item next offset: %d\n", item->offset_prev);
-        if(item->offset_prev != 0){
-            return item+item->offset_prev;
-        }
-        return NULL;
+        return item;
     }
     
     void PrintFrom(Node_dlol<T> *item){
@@ -509,58 +484,95 @@ struct DLOffsetList{
         do{
             printf("%lld -> ", current->data);
         }
-        while((Next(current))!=NULL);
+        while((current = Next(current))!=NULL);
         printf("X\n");
     }
 };
 
+template<typename T>
+struct Mat_nxn{
+    size_t Footprint(int pitch){
+        return sizeof(T) * pitch * pitch;
+    }
+
+    T *Row(void *base, int pitch, int row){
+        return (T*)base + row*pitch;
+    }
+
+    T *Cell(void *base, int pitch, int row, int column){
+        return (T*)base + row*pitch + column;
+    }
+
+    void Zero(void *base, int pitch){
+        memset(base,0,Footprint(pitch));
+    }
+
+    int CountEdges(void *base, int pitch){
+        int count = 0;
+        T* accessor = (T*)base;
+        printf("Size of type: %lu\n", sizeof(T));
+        for(int i = 0; i < (pitch * pitch); i++){
+            int is_edge = !!accessor[i];
+            if(is_edge){
+                printf("Edge detected with value %d at row, column: %d,%d\n", is_edge, i/pitch, i%pitch);
+            }
+            count += is_edge;
+        }
+        return count;
+    }
+};
+
+
 int main(){
-    RawBuffer dll_memory("DLL memory", sizeof(Node_dll<int64_t>) * 16);
-    DLinkedList<int64_t> cursor;
-    Node_dll<int64_t> *list_head = cursor.Init(dll_memory.base, 0);
-    for(int i = 1; i <= 10; ++i){
-        cursor.Insert(cursor.Init(list_head+i,i), list_head+i-1);
-    }
-    Node_dll<int64_t> *list_tail = list_head + 10;
-    printf("List head [prev][next]:  [%p][%p]\n", (void *)list_head->prev, (void *)list_head->next);
-    cursor.PrintFrom(list_head);
-    printf("List tail [prev][next]:  [%p][%p]\n", (void *)list_tail->prev, (void *)list_tail->next);
+    Mat_nxn<int> int_matrix;
+    Mat_nxn< Node_dlol<int> > list_matrix;
+    int pitch = 8;
+    RawBuffer int_matrix_memory("Int Matrix Memory", int_matrix.Footprint(pitch));
+    RawBuffer list_matrix_memory("List Matrix Memory", list_matrix.Footprint(pitch));
 
-    printf("[Cached Head][Computed Head]:[%lld][%lld]\n", list_head->data, cursor.Head(list_tail)->data);
-    printf("[Cached Tail][Computed Tail]:[%lld][%lld]\n", list_tail->data, cursor.Tail(list_head)->data);
+    int_matrix.Zero(int_matrix_memory.base, pitch);
+    list_matrix.Zero(list_matrix_memory.base, pitch);
+
+    printf("Int Matrix computed edge count: %d\n",int_matrix.CountEdges(int_matrix_memory.base, pitch));
+    printf("List Matrix computed edge count: %d\n",list_matrix.CountEdges(list_matrix_memory.base, pitch));
+
+
+    printf("Computed matrix sizes: [int][list]: [%d][%d]\n", int_matrix_memory.size, list_matrix_memory.size);
+
+    *int_matrix.Cell(int_matrix_memory.base, pitch, 0, 2) = 1;
+    *int_matrix.Cell(int_matrix_memory.base, pitch, 2, 0) = 1;
+
+    *int_matrix.Cell(int_matrix_memory.base, pitch, 2, 1) = -1;
+    *int_matrix.Cell(int_matrix_memory.base, pitch, 1, 2) = -1;
+
+    *int_matrix.Cell(int_matrix_memory.base, pitch, 1, 5) = 12;
+    *int_matrix.Cell(int_matrix_memory.base, pitch, 5, 1) = 12;
+
+    *int_matrix.Cell(int_matrix_memory.base, pitch, 7, 4) = -2;
+    *int_matrix.Cell(int_matrix_memory.base, pitch, 4, 7) = -2;
+
+    *int_matrix.Cell(int_matrix_memory.base, pitch, 3, 1) = 2;
+    *int_matrix.Cell(int_matrix_memory.base, pitch, 1, 3) = 2;
     
+    DLOffsetList<int> list_cursor;
+    list_cursor.Init((void*)list_matrix.Cell(list_matrix_memory.base, pitch, 0, 2),1);
+    list_cursor.Init((void*)list_matrix.Cell(list_matrix_memory.base, pitch, 2, 0),1);
 
-    //Offset list is still broken
-    //need to figure out why the olist head is still getting +16 for the offset
-    RawBuffer offset_list("OffsetList memory", sizeof(Node_dlol<int64_t>) * 16);
-    DLOffsetList<int64_t> offset_list_cursor;
-    Node_dlol<int64_t> *olist_head = offset_list_cursor.Init(offset_list.base, 0);
-    //printf("OffsetList Node [ prev <- |Location| -> next ]\n");
-    //printf("[ %d <- |%p| -> %d ]\n", olist_head->offset_prev, olist_head, olist_head->offset_next);
-    for(int i = 1; i < 16; ++i){
-        offset_list_cursor.InsertFirstAfter(offset_list_cursor.Init(olist_head+i, i), olist_head+i-1);
-    }
-    for(int i = 0; i < 16; i++){
-        Node_dlol<int64_t> *node = (olist_head+i);
-        //printf("[ %d <- |%lld| -> %d ]\n",node->offset_prev, node->data, node->offset_next);
-    }
+    list_cursor.Init((void*)list_matrix.Cell(list_matrix_memory.base, pitch, 2, 1),-1);
+    list_cursor.Init((void*)list_matrix.Cell(list_matrix_memory.base, pitch, 1, 2),-1);
 
-    offset_list_cursor.Swap(olist_head+5, olist_head+2);
-    offset_list_cursor.Swap(olist_head+1, olist_head+14);
-    offset_list_cursor.Swap(olist_head+14, olist_head+9);
-    offset_list_cursor.Swap(olist_head+12, olist_head+6);
-    offset_list_cursor.Swap(olist_head+2, olist_head+3);
-    offset_list_cursor.Swap(olist_head+13, olist_head+7);
-    offset_list_cursor.Swap(olist_head+4, olist_head+5);
-    offset_list_cursor.Swap(olist_head+6, olist_head+11);
+    list_cursor.Init((void*)list_matrix.Cell(list_matrix_memory.base, pitch, 1, 5),12);
+    list_cursor.Init((void*)list_matrix.Cell(list_matrix_memory.base, pitch, 5, 1),12);
 
-    for(int i = 0; i < 16; i++){
-        Node_dlol<int64_t> *node = (olist_head+i);
-        printf("[ %d <- |%lld| -> %d ]\n",node->offset_prev, node->data, node->offset_next);
-    }
-    //offset_list_cursor.PrintFrom(olist_head);
+    list_cursor.Init((void*)list_matrix.Cell(list_matrix_memory.base, pitch, 7, 4),-2);
+    list_cursor.Init((void*)list_matrix.Cell(list_matrix_memory.base, pitch, 4, 7),-2);
+
+    list_cursor.Init((void*)list_matrix.Cell(list_matrix_memory.base, pitch, 3, 1),2);
+    list_cursor.Init((void*)list_matrix.Cell(list_matrix_memory.base, pitch, 1, 3),2);
 
 
+    printf("Int Matrix computed edge count: %d\n",int_matrix.CountEdges(int_matrix_memory.base, pitch));
+    printf("List Matrix computed edge count: %d\n",list_matrix.CountEdges(list_matrix_memory.base, pitch));
 
 
     return 0;
