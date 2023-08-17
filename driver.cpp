@@ -17,7 +17,7 @@ struct RawBuffer{
     int size;
 
     RawBuffer(const char *buffer_id, int in_size){
-        base = ALLOCATE(sizeof(in_size));
+        base = ALLOCATE(in_size);
         size = in_size;
         id = buffer_id;
     }
@@ -491,16 +491,25 @@ struct DLOffsetList{
 
 template<typename T>
 struct Mat_nxn{
+
     size_t Footprint(int pitch){
         return sizeof(T) * pitch * pitch;
     }
 
     T *Row(void *base, int pitch, int row){
-        return (T*)base + row*pitch;
+        if(row > pitch){
+            return NULL;
+        }
+        T* accessor = (T*)base; 
+        return accessor + row*pitch;
     }
 
     T *Cell(void *base, int pitch, int row, int column){
-        return (T*)base + row*pitch + column;
+        if(row > pitch || column > pitch){
+            return NULL;
+        }
+        T* accessor = (T*)base;
+        return accessor + row*pitch + column;
     }
 
     void Zero(void *base, int pitch){
@@ -509,70 +518,103 @@ struct Mat_nxn{
 
     int CountEdges(void *base, int pitch){
         int count = 0;
-        T* accessor = (T*)base;
         printf("Size of type: %lu\n", sizeof(T));
-        for(int i = 0; i < (pitch * pitch); i++){
-            int is_edge = !!accessor[i];
-            if(is_edge){
-                printf("Edge detected with value %d at row, column: %d,%d\n", is_edge, i/pitch, i%pitch);
+        for(int j = 0; j < pitch; ++j){
+            for(int i = 0; i < pitch; i++){
+                T *cell = Cell(base, pitch, j, i);
+                int is_edge = !!(*cell);
+                if(is_edge){
+                    printf("Edge detected with value %d at row, column: %d,%d\n", is_edge, j, i);
+                }
+                count += is_edge;
             }
-            count += is_edge;
         }
         return count;
     }
 };
+
+void PrintIntMatrix(void *base, int pitch){
+    printf("Int Matrix: \n");
+    int *accessor = (int *)base;
+    for(int j = 0; j < pitch; ++j){
+        for(int i = 0; i < pitch; ++i){
+            int item = accessor[j*pitch + i];
+            if(item){
+                printf("[O]");
+            }
+            else{
+                printf("[ ]");
+            }
+        }
+        printf("\n");
+    }
+}
+
+void PrintListMatrix(void *base, int pitch){
+    printf("List Matrix:\n");
+    Node_dlol<int> *accessor = (Node_dlol<int> *)base;
+    for(int j = 0; j < pitch; ++j){
+        for(int i = 0; i < pitch; ++i){
+            int item = accessor[j*pitch + i].data;
+            if(item){
+                printf("[O]");
+            }
+            else{
+                printf("[ ]");
+            }
+        }
+        printf("\n");
+    }
+}
 
 
 int main(){
     Mat_nxn<int> int_matrix;
     Mat_nxn< Node_dlol<int> > list_matrix;
     int pitch = 8;
-    RawBuffer int_matrix_memory("Int Matrix Memory", int_matrix.Footprint(pitch));
-    RawBuffer list_matrix_memory("List Matrix Memory", list_matrix.Footprint(pitch));
+    RawBuffer int_matrix_memory("Int Matrix Memory\n", int_matrix.Footprint(pitch));
+    RawBuffer list_matrix_memory("List Matrix Memory\n", list_matrix.Footprint(pitch));
 
-    int_matrix.Zero(int_matrix_memory.base, pitch);
+    printf("Int Buffer base: %p", int_matrix_memory.base);
+    printf("List Buffer base: %p", list_matrix_memory.base);
+
     list_matrix.Zero(list_matrix_memory.base, pitch);
-
-    printf("Int Matrix computed edge count: %d\n",int_matrix.CountEdges(int_matrix_memory.base, pitch));
-    printf("List Matrix computed edge count: %d\n",list_matrix.CountEdges(list_matrix_memory.base, pitch));
-
-
-    printf("Computed matrix sizes: [int][list]: [%d][%d]\n", int_matrix_memory.size, list_matrix_memory.size);
-
-    *int_matrix.Cell(int_matrix_memory.base, pitch, 0, 2) = 1;
-    *int_matrix.Cell(int_matrix_memory.base, pitch, 2, 0) = 1;
-
-    *int_matrix.Cell(int_matrix_memory.base, pitch, 2, 1) = -1;
-    *int_matrix.Cell(int_matrix_memory.base, pitch, 1, 2) = -1;
-
-    *int_matrix.Cell(int_matrix_memory.base, pitch, 1, 5) = 12;
-    *int_matrix.Cell(int_matrix_memory.base, pitch, 5, 1) = 12;
-
-    *int_matrix.Cell(int_matrix_memory.base, pitch, 7, 4) = -2;
-    *int_matrix.Cell(int_matrix_memory.base, pitch, 4, 7) = -2;
-
-    *int_matrix.Cell(int_matrix_memory.base, pitch, 3, 1) = 2;
-    *int_matrix.Cell(int_matrix_memory.base, pitch, 1, 3) = 2;
+    int_matrix.Zero(int_matrix_memory.base, pitch);
     
-    DLOffsetList<int> list_cursor;
-    list_cursor.Init((void*)list_matrix.Cell(list_matrix_memory.base, pitch, 0, 2),1);
-    list_cursor.Init((void*)list_matrix.Cell(list_matrix_memory.base, pitch, 2, 0),1);
+    PrintIntMatrix(int_matrix_memory.base, pitch);
 
-    list_cursor.Init((void*)list_matrix.Cell(list_matrix_memory.base, pitch, 2, 1),-1);
-    list_cursor.Init((void*)list_matrix.Cell(list_matrix_memory.base, pitch, 1, 2),-1);
+    //printf("List Matrix computed edge count: %d\n",list_matrix.CountEdges(list_matrix_memory.base, pitch));
+    //printf("Int Matrix computed edge count: %d\n",int_matrix.CountEdges(int_matrix_memory.base, pitch));
+    
+    for(int i = 0; i < 8; ++i){
+        Node_dlol<int> *cell = list_matrix.Cell(list_matrix_memory.base, pitch, i,i);
+        if(list_matrix_memory.InRange(cell)){
+            cell->data = 1;
+        }
+        else{
+            printf("Incorrectly calculated location for cell: (%d,%d)", i,i);
+        }
+    }
+    
+    printf("Int Memory  [Start -> End]: [%p -> %p]\n", (int *)int_matrix_memory.base, (int*)int_matrix_memory.base + int_matrix.Footprint(pitch));
+    printf("Node Memory [Start -> End]: [%p -> %p]\n", (Node_dlol<int> *)list_matrix_memory.base, (Node_dlol<int> *) list_matrix_memory.base + list_matrix.Footprint(pitch));
 
-    list_cursor.Init((void*)list_matrix.Cell(list_matrix_memory.base, pitch, 1, 5),12);
-    list_cursor.Init((void*)list_matrix.Cell(list_matrix_memory.base, pitch, 5, 1),12);
-
-    list_cursor.Init((void*)list_matrix.Cell(list_matrix_memory.base, pitch, 7, 4),-2);
-    list_cursor.Init((void*)list_matrix.Cell(list_matrix_memory.base, pitch, 4, 7),-2);
-
-    list_cursor.Init((void*)list_matrix.Cell(list_matrix_memory.base, pitch, 3, 1),2);
-    list_cursor.Init((void*)list_matrix.Cell(list_matrix_memory.base, pitch, 1, 3),2);
-
-
-    printf("Int Matrix computed edge count: %d\n",int_matrix.CountEdges(int_matrix_memory.base, pitch));
-    printf("List Matrix computed edge count: %d\n",list_matrix.CountEdges(list_matrix_memory.base, pitch));
+    /*
+    for(int i = 0; i < 8; ++i){
+        int *cell = int_matrix.Cell(int_matrix_memory.base, pitch, i,i);
+        if(int_matrix_memory.InRange(cell)){
+            *cell = 1;
+        }
+        else{
+            printf("Incorrectly calculated location for cell: (%d,%d)", i,i);
+        }
+    }
+    */
+    printf("\n\n");
+    PrintIntMatrix(int_matrix_memory.base, pitch);
+    PrintListMatrix(list_matrix_memory.base, pitch);
+    //printf("List Matrix computed edge count: %d\n",list_matrix.CountEdges(list_matrix_memory.base, pitch));
+    //printf("Int Matrix computed edge count: %d\n",int_matrix.CountEdges(int_matrix_memory.base, pitch));
 
 
     return 0;
