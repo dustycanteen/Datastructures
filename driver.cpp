@@ -57,7 +57,7 @@ struct StackState{
 };
 
 template<typename T>
-struct StackCursor{
+struct Stack{
     void *Push(void *loc, T dat){
         T *current = (T*)loc;
         *current = dat;
@@ -79,6 +79,7 @@ struct Node_sll{
     Node_sll<T> *next;
     T data;
     Node_sll(T in_data):next(NULL), data(in_data){}
+    Node_sll(T in_data, Node_sll<T> *next):next(NULL), data(in_data){}
 
     operator bool() const{
         return next || data; 
@@ -491,7 +492,6 @@ struct DLOffsetList{
 
 template<typename T>
 struct Mat_nxn{
-
     size_t Footprint(int pitch){
         return sizeof(T) * pitch * pitch;
     }
@@ -572,8 +572,8 @@ int main(){
     Mat_nxn<int> int_matrix;
     Mat_nxn< Node_dlol<int> > list_matrix;
     int pitch = 8;
-    RawBuffer int_matrix_memory("Int Matrix Memory\n", int_matrix.Footprint(pitch));
-    RawBuffer list_matrix_memory("List Matrix Memory\n", list_matrix.Footprint(pitch));
+    RawBuffer int_matrix_memory("Int Matrix Memory", int_matrix.Footprint(pitch));
+    RawBuffer list_matrix_memory("List Matrix Memory", list_matrix.Footprint(pitch));
 
     printf("Int Buffer base: %p", int_matrix_memory.base);
     printf("List Buffer base: %p", list_matrix_memory.base);
@@ -599,7 +599,6 @@ int main(){
     printf("Int Memory  [Start -> End]: [%p -> %p]\n", (int *)int_matrix_memory.base, (int*)int_matrix_memory.base + int_matrix.Footprint(pitch));
     printf("Node Memory [Start -> End]: [%p -> %p]\n", (Node_dlol<int> *)list_matrix_memory.base, (Node_dlol<int> *) list_matrix_memory.base + list_matrix.Footprint(pitch));
 
-    /*
     for(int i = 0; i < 8; ++i){
         int *cell = int_matrix.Cell(int_matrix_memory.base, pitch, i,i);
         if(int_matrix_memory.InRange(cell)){
@@ -609,12 +608,52 @@ int main(){
             printf("Incorrectly calculated location for cell: (%d,%d)", i,i);
         }
     }
-    */
+    
     printf("\n\n");
     PrintIntMatrix(int_matrix_memory.base, pitch);
     PrintListMatrix(list_matrix_memory.base, pitch);
-    //printf("List Matrix computed edge count: %d\n",list_matrix.CountEdges(list_matrix_memory.base, pitch));
-    //printf("Int Matrix computed edge count: %d\n",int_matrix.CountEdges(int_matrix_memory.base, pitch));
+    printf("List Matrix computed edge count: %d\n",list_matrix.CountEdges(list_matrix_memory.base, pitch));
+    printf("Int Matrix computed edge count: %d\n",int_matrix.CountEdges(int_matrix_memory.base, pitch));
+
+    int num_nodes = 8;
+    int num_edges = 15;
+    Stack< Node_sll<int> >adjacency_list;
+    RawBuffer graph_data("Adjacency List Memory", (num_nodes + num_edges) * sizeof(Node_sll<int>));
+    void *free = graph_data.base;
+    for(int i = 0; i < num_nodes; ++i){
+        free = adjacency_list.Push(free, Node_sll<int>(0));
+    }
+    Node_sll<int> *base = (Node_sll<int> *)graph_data.base;
+    for(int i = 0; i < num_nodes; ++i){
+        switch(i){
+            case 0:{
+                free = adjacency_list.Push(free, Node_sll<int>(5, ))
+            }break;
+            case 1:{
+
+            }break;
+            case 2:{
+
+            }break;
+            case 3:{
+
+            }break;
+            case 4:{
+
+            }break;
+            case 5:{
+
+            }break;
+            case 6:{
+
+            }break;
+            case 7:{
+
+            }break;
+            default:
+            break;
+        }
+    }
 
 
     return 0;
