@@ -6,6 +6,7 @@
 #include <string.h>
 
 #define ALLOCATE malloc 
+#define FREE free
 #define kb(s) (1024*(s))
 #define mb(s) (1024*kb(s))
 #define gb(s) (1024*mb(s))
@@ -34,6 +35,10 @@ struct RawBuffer{
 
     int InRange(void *data){
             return (data >= base && data < (void *)((char *)base + size));
+    }
+
+    void Delete(){
+        FREE(base);
     }
 };
 
@@ -109,7 +114,7 @@ struct SLinkedList{
         self->next = NULL;
     }
 
-    void Append(Node_sll<T> *item, Node_sll<T> *list){
+    void Prepend(Node_sll<T> *item, Node_sll<T> *list){
         item->next = list;
     }
 
@@ -156,7 +161,7 @@ struct SLinkedList{
             print_fn(current->data);
         }
         while((current = Next(current)) && length < max_length);
-        printf("X\n");
+        printf("\n");
     }
 };
 
@@ -185,7 +190,7 @@ struct SLLAllocator{
         SLinkedList<T> cursor;
         Node_sll<T> *front = cursor.Calve(&free_list);
         if(used_list){
-            cursor.Append(front, used_list);
+            cursor.Prepend(front, used_list);
         }
         used_list = front;
         return &used_list->data;
@@ -206,7 +211,7 @@ struct SLLAllocator{
                 }
                 node = cursor.RemoveNext(current);
             }
-            cursor.Append(node, free_list);
+            cursor.Prepend(node, free_list);
             free_list = node;
             result = 1;
         }
@@ -568,6 +573,66 @@ void PrintListMatrix(void *base, int pitch){
 }
 
 
+void PrintEdges(int i){
+    printf("%d->",i);
+}
+
+struct AdjacencyList{
+private: 
+    void InitEdges(int node_index, int *connection_data, int total_edge_count, int edge_count){
+        Stack< Node_sll<int> >stack_ops;
+        SLinkedList<int> linked_list_ops;
+
+        Node_sll<int> *node = nodes + node_index;
+        Node_sll<int> *edge = edges + total_edge_count;
+        for(int i = 0; i < edge_count; ++i){
+            Node_sll<int> *current = edge;
+            edge = (Node_sll<int> *)stack_ops.Push(current, Node_sll<int>(connection_data[i]));
+            linked_list_ops.Prepend(current, node->next);
+            node->next = current;
+        }
+    }
+public:
+    RawBuffer *element_memory;
+    int edge_count;
+    int node_count;
+    Node_sll<int> *nodes;
+    Node_sll<int> *edges;
+
+    AdjacencyList(RawBuffer *in_memory, int in_node_count){
+        element_memory = in_memory;
+        node_count = in_node_count;
+        edge_count = element_memory->size / sizeof(Node_sll<int>) - node_count;
+        nodes = (Node_sll<int> *)in_memory->base;
+        edges = nodes + node_count;
+    }
+
+    void InitList(int *node_data, int *edge_counts, int *edge_data){
+        Stack< Node_sll<int> >stack_ops;
+        void *free = nodes;
+        for(int i = 0; i <node_count; ++i){
+            free = stack_ops.Push(free, Node_sll<int>(node_data[i]));
+        }
+
+        int edges_visited = 0;
+        for(int i = 0; i < node_count; ++i){
+            int node_index = i;
+            int edge_count = edge_counts[i];
+            InitEdges(node_index, edge_data + edges_visited, edges_visited, edge_count);
+            edges_visited+=edge_count;
+        }
+    }
+
+    void Print(){
+        SLinkedList<int> linked_list_ops;
+        printf("Printing Adjacency List:\n");
+        for(int i = 0; i < node_count; ++i){
+            printf("\tNode %d edges:\n\t\t", nodes[i].data);
+            linked_list_ops.PrintContents(nodes+i, PrintEdges);
+        }
+    }
+};
+
 int main(){
     Mat_nxn<int> int_matrix;
     Mat_nxn< Node_dlol<int> > list_matrix;
@@ -615,45 +680,17 @@ int main(){
     printf("List Matrix computed edge count: %d\n",list_matrix.CountEdges(list_matrix_memory.base, pitch));
     printf("Int Matrix computed edge count: %d\n",int_matrix.CountEdges(int_matrix_memory.base, pitch));
 
-    int num_nodes = 8;
-    int num_edges = 15;
-    Stack< Node_sll<int> >adjacency_list;
-    RawBuffer graph_data("Adjacency List Memory", (num_nodes + num_edges) * sizeof(Node_sll<int>));
-    void *free = graph_data.base;
-    for(int i = 0; i < num_nodes; ++i){
-        free = adjacency_list.Push(free, Node_sll<int>(0));
-    }
-    Node_sll<int> *base = (Node_sll<int> *)graph_data.base;
-    for(int i = 0; i < num_nodes; ++i){
-        switch(i){
-            case 0:{
-                free = adjacency_list.Push(free, Node_sll<int>(5, ))
-            }break;
-            case 1:{
+    int node_count = 8;
+    int edge_count = 10;
+    RawBuffer adjacency_list_memory("Adjacency List Memory", sizeof(Node_sll<int>) * (node_count + edge_count));
 
-            }break;
-            case 2:{
+    int node_ids[] = {0, 1, 2, 3, 4, 5, 6, 7};
+    int edge_counts[] = {1, 2, 2, 2, 1, 1, 0, 1};
+    int edges[] = {5, 0, 2, 4, 5, 7, 2, 5, 6, 3}; 
 
-            }break;
-            case 3:{
-
-            }break;
-            case 4:{
-
-            }break;
-            case 5:{
-
-            }break;
-            case 6:{
-
-            }break;
-            case 7:{
-
-            }break;
-            default:
-            break;
-        }
-    }
+    AdjacencyList list(&adjacency_list_memory, node_count);
+    list.InitList(node_ids,edge_counts, edges);
+    list.Print();
 
 
     return 0;
