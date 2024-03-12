@@ -1,6 +1,5 @@
 #pragma once
 
-
 template <typename T>
 struct Node_dll{
     Node_dll<T> *prev;
@@ -24,22 +23,17 @@ struct DLinkedList{
     }
 
     Node_dll<T> *Head(Node_dll<T> *item){
-        const int MAX_LIST_SIZE = 16;
-        int count = 0;
 
         Node_dll<T> *current = item;
 
-        while((current = current->prev)->prev != NULL && count++ < MAX_LIST_SIZE); //just assume no cycles D:
+        while((current = current->prev)->prev != NULL); //just assume no cycles D:
         return current;
     }
     
     Node_dll<T> *Tail(Node_dll<T> *item){
-        const int MAX_LIST_SIZE = 16;
-        int count = 0;
-
         Node_dll<T> *current = item;
 
-        while((current = current->next)->next != NULL && count++ < MAX_LIST_SIZE); //just assume no cycles D:
+        while((current = current->next)->next != NULL); //just assume no cycles D:
         return current;
     }
     
@@ -66,13 +60,10 @@ struct DLinkedList{
     }
 
     void PrintFrom(Node_dll<T> *item){
-        const int MAX_LIST_SIZE = 16;
-        int count = 0;
-
         printf("Printing List From Node: %p\n", (void *)item);
         printf("[Node at: %p < %lld >] -> \n", (void *)item, item->data);
         Node_dll<T> *current = item;
-        while((current = current->next)->next != NULL && count++ < MAX_LIST_SIZE){ //just assume no cycles D:
+        while((current = current->next)->next != NULL){ //just assume no cycles D:
             printf("[Node at: %p < %lld >] -> \n", (void *)current, current->data);
         }
         printf("[Node at: %p < %lld >] -> \n", (void *)current, current->data);

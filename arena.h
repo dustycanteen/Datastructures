@@ -24,13 +24,13 @@ public:
 
     ArenaHeader *Push(int arena_size_bytes){
         int allocation_size = ((arena_size_bytes + 7) / 8) * 8; //round allocation to nearest 64 bytes
-        printf("Arena allocation size: %d\n", allocation_size);
+        //printf("Arena allocation size: %d\n", allocation_size);
         ArenaHeader *item = top;
         item->size=allocation_size;
         char *arena_top_bytes = (char*)top;
-        printf("Arena Top before push: %ld\n", arena_top_bytes - (char *)buffer->base);
+        //printf("Arena Top before push: %ld\n", arena_top_bytes - (char *)buffer->base);
         arena_top_bytes += allocation_size + sizeof(ArenaHeader);
-        printf("Arena Top after push: %ld\n", arena_top_bytes - (char *)buffer->base);
+        //printf("Arena Top after push: %ld\n", arena_top_bytes - (char *)buffer->base);
 
 
         if(buffer->InRange((void *)arena_top_bytes)){
